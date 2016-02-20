@@ -23,24 +23,26 @@ public class WikibookCrawler {
 	 */
 	public static void main(String[] args) throws IOException {
 		String url = "https://en.wikibooks.org/wiki/Java_Programming";
-		LinkedHashMap<String, HashMap<String, String>> topicsMap = new LinkedHashMap<String, HashMap<String, String>>();
+		LinkedHashMap<String, String> topicsMap = new LinkedHashMap<String, String>();
 		HashMap<String, LinkedHashMap<String, String>> pages = new HashMap<String, LinkedHashMap<String, String>>();
 		getLinks(url, topicsMap);
-		/*
-		 * for(Map.Entry<String, HashMap<String,String>> entry:
-		 * topicsMap.entrySet()){ String title = entry.getKey(); HashMap<String,
-		 * String> tempMap = entry.getValue(); print("%s %s", title,
-		 * tempMap.toString()); if (tempMap.containsKey(title) == false)
-		 * getLinks(tempMap.get("link"), topicsMap); }
-		 */
+		for(Map.Entry<String, String> entry:topicsMap.entrySet()){ 
+			String link = entry.getValue();
+			getPageStart(link, pages);
+			getText(link, pages);
+		}
+		print("%d", pages.size());
+/*	 
 		getPageStart(url+"/Statements", pages);
 		getText(url+"/Statements", pages);
 		print("%d %s", pages.size() , pages.toString());
+*/	
 	}
 	
 	private static void getPageStart(String url,HashMap<String, LinkedHashMap<String, String>> hp) throws IOException {
 		int index = url.lastIndexOf("/");
 		String title = url.substring(index+1);
+		print("Fetching pageStart: %s", title);
 		Document doc = Jsoup.connect(url).get();
 		Elements contents = doc.select("#mw-content-text > table");
 		LinkedHashMap<String, String> tempMap = new LinkedHashMap<String, String>();
@@ -68,6 +70,7 @@ public class WikibookCrawler {
 	private static void getText(String url, HashMap<String, LinkedHashMap<String, String>> hp) throws IOException {
 		int index = url.lastIndexOf("/");
 		String title = url.substring(index+1);
+		print("Fetching Text: %s", title);
 		Document doc = Jsoup.connect(url).get();
 		Elements contents = doc.select("#mw-content-text > p");
 		Elements subHeadings = doc.select("#mw-content-text > h2");
@@ -113,8 +116,9 @@ public class WikibookCrawler {
 */		
 	}
 
-	private static void getLinks(String url, LinkedHashMap<String, HashMap<String, String>> hp) throws IOException {
+	private static void getLinks(String url, LinkedHashMap<String, String> hp) throws IOException {
 		try {
+			boolean flag = false;
 			print("Fetching %s...", url);
 			Document doc = Jsoup.connect(url).get();
 			Elements topicList = doc.select("#mw-content-text > ul > li");
@@ -122,11 +126,10 @@ public class WikibookCrawler {
 				Element temp = topic.select("a[href]").last();
 				String title = temp.text();
 				String link = temp.attr("abs:href");
-				if (hp.containsKey(title) == false) {
-					hp.put(title, new HashMap<String, String>());
-					HashMap<String, String> tempMap = hp.get(title);
-					tempMap.put("title", title);
-					tempMap.put("link", link);
+				if (title.equals("Statements"))
+					flag = true;
+				if (hp.containsKey(title) == false && flag) {
+					hp.put(title, link);
 				}
 			}
 		} catch (NullPointerException e) {
