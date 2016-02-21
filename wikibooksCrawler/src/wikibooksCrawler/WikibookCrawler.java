@@ -9,6 +9,8 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
 
@@ -35,13 +37,39 @@ public class WikibookCrawler {
 				getText(link, pages, pageClassifier);
 		}
 		print("%d", pages.size());
+		writeToFile(pages);
 
 	 
-/*		pageClassifier = getPageStart(url+"/3D_Programming", pages);
+/*		pageClassifier = getPageStart(url+"/Statements", pages);
 		if (!pageClassifier.equals("noscript"))
-			getText(url+"/3D_Programming", pages, pageClassifier);
+			getText(url+"/Statements", pages, pageClassifier);
 		print("%d %s", pages.size() , pages.toString());
 */	
+	}
+	
+	private static void writeToFile(HashMap<String, LinkedHashMap<String, String>> hp){
+		for (Map.Entry<String, LinkedHashMap<String,String>> page: hp.entrySet()){
+			boolean dirCreated;
+			String pageHeading = page.getKey();
+			File dir = new File("/home/arun/Documents/Adaptive Web/assignment2/crawledPages/"+pageHeading);
+			dirCreated = dir.mkdir();
+			if (dirCreated){
+				String filePath = dir.getAbsolutePath();
+				for(Map.Entry<String, String> topic: page.getValue().entrySet()){
+					String topicName = topic.getKey();
+					File topicFile = new File(filePath+"/"+topicName);
+					try {
+						FileWriter fw = new FileWriter(topicFile);
+						fw.write(topic.getValue());
+						fw.flush();
+						fw.close();
+						print("File Written: %s", topicFile);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		}
 	}
 	
 	private static String getPageStart(String url,HashMap<String, LinkedHashMap<String, String>> hp) throws IOException {
@@ -67,7 +95,7 @@ public class WikibookCrawler {
 					sb.append(content.text()+"\n");
 					content = content.nextElementSibling();
 				}
-				tempMap.put("introduction", sb.toString());
+				tempMap.put(title+"_introduction", sb.toString());
 			}
 			else if (content.hasClass("wikitable") && content.hasAttr("style") && flag){
 				flag = false;
@@ -84,7 +112,7 @@ public class WikibookCrawler {
 							break;
 					}
 					pageClassifier = "h2";
-					tempMap.put("introduction", sb.toString());
+					tempMap.put(title+"_introduction", sb.toString());
 				}
 				else{
 					while(!temp.nextElementSibling().tagName().equals("h2") && !temp.nextElementSibling().tagName().equals("h3") && !temp.nextElementSibling().tagName().equals("noscript")){
@@ -103,11 +131,12 @@ public class WikibookCrawler {
 								content = content.nextElementSibling();
 							}
 							sb.append(content.text()+"\n");
-	
+							tempMap.put(title+"_introduction", sb.toString());
 							break;
 						}
 						case "h3":{
 							sb.append(content.text()+"\n");
+							tempMap.put(title+"_introduction", sb.toString());
 							break;
 	
 						}
@@ -120,10 +149,10 @@ public class WikibookCrawler {
 								}
 								sb.append(text+"\n");
 								content = content.nextElementSibling();
+								tempMap.put(title+"_introduction", sb.toString());
 								break;
 							}
 						}
-						tempMap.put("introduction", sb.toString());
 					}
 				}
 			}
@@ -144,8 +173,8 @@ public class WikibookCrawler {
 		for(Element subHeading: subHeadings){
 			int len = subHeading.text().length();
 			int pos;
-			String subTopic = null;
-			pos = subHeading.text().indexOf("[Edit]");
+			String subTopic = subHeading.text();
+			pos = subHeading.text().indexOf("[edit]");
 			if (pos != -1)
 				subTopic = subHeading.text().substring(0, pos);
 			else if(pos == -1){
@@ -164,6 +193,8 @@ public class WikibookCrawler {
 				sb.append(text+"\n");
 				subHeading = subHeading.nextElementSibling();
 			}
+			if(subTopic.contains("/"))
+				subTopic = subTopic.replaceAll("/", "_");
 			tempMap.put(subTopic, sb.toString());
 		}
 		
