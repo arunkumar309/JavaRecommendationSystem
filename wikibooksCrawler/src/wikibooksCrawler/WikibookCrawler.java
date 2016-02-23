@@ -28,7 +28,7 @@ public class WikibookCrawler {
 		LinkedHashMap<String, String> topicsMap = new LinkedHashMap<String, String>();
 		HashMap<String, LinkedHashMap<String, String>> pages = new HashMap<String, LinkedHashMap<String, String>>();
 		String pageClassifier;
-		getLinks(url, topicsMap);
+		crawlURL(url, topicsMap);
 
 		for(Map.Entry<String, String> entry:topicsMap.entrySet()){ 
 			String link = entry.getValue();
@@ -39,10 +39,20 @@ public class WikibookCrawler {
 		print("%d", pages.size());
 		writeToFile(pages);
 
-	 
-/*		pageClassifier = getPageStart(url+"/Statements", pages);
+		
+/*		String[] tempPages = {
+				"Reflection/Dynamic_Invocation",
+				"Networking",
+				"Libraries,_extensions_and_frameworks"};
+		for(String page: tempPages){
+			pageClassifier = getPageStart(url+"/"+page, pages);
+			print("%s\n------------------------------------\n\n", pages.toString());
+		}
+*/	
+
+/*		pageClassifier = getPageStart(url+"/API/java.lang.String", pages);
 		if (!pageClassifier.equals("noscript"))
-			getText(url+"/Statements", pages, pageClassifier);
+			getText(url+"/API/java.lang.String", pages, pageClassifier);
 		print("%d %s", pages.size() , pages.toString());
 */	
 	}
@@ -60,7 +70,7 @@ public class WikibookCrawler {
 					File topicFile = new File(filePath+"/"+topicName);
 					try {
 						FileWriter fw = new FileWriter(topicFile);
-						fw.write(topic.getValue());
+						fw.write(topic.getValue().toLowerCase());
 						fw.flush();
 						fw.close();
 						print("File Written: %s", topicFile);
@@ -73,8 +83,8 @@ public class WikibookCrawler {
 	}
 	
 	private static String getPageStart(String url,HashMap<String, LinkedHashMap<String, String>> hp) throws IOException {
-		int index = url.lastIndexOf("/");
-		String title = url.substring(index+1);
+		int index = url.lastIndexOf("Java_Programming/");
+		String title = url.substring(index+17);
 		boolean flag = true;
 		boolean divFlag = false;
 		print("Fetching pageStart: %s", title);
@@ -141,7 +151,7 @@ public class WikibookCrawler {
 	
 						}
 						case "noscript":{
-							while(!content.nextElementSibling().nextElementSibling().tagName().equals("noscript")){
+							while((!content.nextElementSibling().nextElementSibling().tagName().equals("noscript")) || ((content.nextElementSibling().nextElementSibling().tagName().equals("table")) && ((content.nextElementSibling().nextElementSibling().hasClass("noprint") || (content.nextElementSibling().nextElementSibling().hasClass("notice")))))){
 								text = content.text();
 								if(text.startsWith("Code section") || text.startsWith("Code listing")){
 									int indexTemp = text.lastIndexOf(": ");
@@ -149,9 +159,9 @@ public class WikibookCrawler {
 								}
 								sb.append(text+"\n");
 								content = content.nextElementSibling();
-								tempMap.put(title+"_introduction", sb.toString());
-								break;
 							}
+							tempMap.put(title+"_introduction", sb.toString());
+							break;
 						}
 					}
 				}
@@ -162,8 +172,8 @@ public class WikibookCrawler {
 	}
 
 	private static void getText(String url, HashMap<String, LinkedHashMap<String, String>> hp, String pageClassifier) throws IOException {
-		int index = url.lastIndexOf("/");
-		String title = url.substring(index+1);
+		int index = url.lastIndexOf("Java_Programming/");
+		String title = url.substring(index+17);
 		print("Fetching Text: %s", title);
 		Document doc = Jsoup.connect(url).get();
 		Elements contents = doc.select("#mw-content-text > p");
@@ -171,7 +181,6 @@ public class WikibookCrawler {
 		Elements codes = doc.getElementsByClass("mw-highlight");
 		LinkedHashMap<String, String> tempMap = hp.get(title);
 		for(Element subHeading: subHeadings){
-			int len = subHeading.text().length();
 			int pos;
 			String subTopic = subHeading.text();
 			pos = subHeading.text().indexOf("[edit]");
@@ -221,16 +230,24 @@ public class WikibookCrawler {
 */		
 	}
 
-	private static void getLinks(String url, LinkedHashMap<String, String> hp) throws IOException {
+	private static void crawlURL(String url, LinkedHashMap<String, String> hp) throws IOException {
 		try {
 			boolean flag = false;
 			print("Fetching %s...", url);
 			Document doc = Jsoup.connect(url).get();
 			Elements topicList = doc.select("#mw-content-text > ul > li");
-			for (Element topic : topicList) {
+			fetchLinks(topicList, hp, flag);
+			flag = true;
+			topicList = doc.select("#mw-content-text > ul > li > ul > li");
+			fetchLinks(topicList, hp, flag);
+			topicList = doc.select("#mw-content-text > dl > dd > ul > li");
+			fetchLinks(topicList, hp, flag);
+
+/*			for (Element topic : topicList) {
 				Element temp = topic.select("a[href]").last();
 				String title = temp.text();
 				String link = temp.attr("abs:href");
+				print("%s", link);
 				if (title.equals("Statements"))
 					flag = true;
 				if (title.equals("Links"))
@@ -239,11 +256,27 @@ public class WikibookCrawler {
 					hp.put(title, link);
 				}
 			}
-		} catch (NullPointerException e) {
+*/
+			} catch (NullPointerException e) {
 			print("%s", "Exception caught");
 		}
 	}
 
+	private static void fetchLinks(Elements topicList, LinkedHashMap<String, String> hp, boolean flag){
+		for (Element topic : topicList) {
+			Element temp = topic.select("a[href]").last();
+			String title = temp.text();
+			String link = temp.attr("abs:href");
+			if (title.equals("Statements"))
+				flag = true;
+			if (title.equals("Links"))
+				flag = false;
+			if (hp.containsKey(title) == false && flag) {
+				hp.put(title, link);
+			}
+		}
+	}
+	
 	private static void print(String msg, Object... args) {
 		System.out.println(String.format(msg, args));
 	}
