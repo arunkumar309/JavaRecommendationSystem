@@ -1,4 +1,6 @@
 package wikibooksCrawler;
+
+import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
@@ -16,12 +18,20 @@ import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopScoreDocCollector;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.RAMDirectory;
+import org.tartarus.snowball.ext.PorterStemmer;
+import wikibooksCrawler.stopWords;
+
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Scanner;
 /**
  * Lucene Demo: basic similarity based content indexing 
@@ -31,6 +41,10 @@ import java.util.Scanner;
 
 
 public class SimpleLuceneIndexing {
+	
+	static stopWords stopObj = new stopWords();
+	public static String stopwords[] = stopObj.stopwords;
+	public static HashSet<String> stopSet = new HashSet<String>(Arrays.asList(stopwords));
 	
 	private static void indexDirectory(IndexWriter writer, File dir) throws IOException {
 		File[] files = dir.listFiles();
@@ -75,9 +89,54 @@ public class SimpleLuceneIndexing {
 		
 	}	
 	
+	public static String applyPorterStemmer(String input) throws IOException {
+		StringBuffer sb = new StringBuffer();
+	    PorterStemmer stemmer = new PorterStemmer();
+		String[] words= input.split("\\s");
+		for(String word: words){
+			if(notStopWord(word)){
+		        stemmer.setCurrent(word.toLowerCase());
+		        stemmer.stem();
+		        sb.append(stemmer.getCurrent()+ " ");
+			}
+		}
+		return sb.toString();
+    }
+	
+	private static boolean notStopWord(String word){
+		return !(stopSet.contains(word));
+	}
+	
+	private static void writeToFile(StringBuilder sb, String fileName) throws IOException{
+		FileWriter fw = new FileWriter(fileName);
+		fw.write(sb.toString());
+		fw.flush();
+		fw.close();
+	}
+	
+	private static void extractContents(int postNo, String querystr, ScoreDoc[] hits, IndexSearcher searcher) throws IOException{
+		String outputLoc = "./Recommendations/";
+		int i;
+		StringBuilder sb = new StringBuilder();
+		sb.append(querystr+"\n####---####\n");
+		for(i=0;i<hits.length;i++){
+			 int docId = hits[i].doc;
+			 Document d;
+			 d = searcher.doc(docId);
+			 String fileName = d.get("filename");
+			 fileName = fileName.replace("Stemmed", "");
+			 String outFileContents = new String(Files.readAllBytes(Paths.get(fileName)));
+			 if(outFileContents.startsWith("Code") || outFileContents.startsWith("Test") || outFileContents.startsWith("COM_DATA") || outFileContents.startsWith("ComServer"))
+				 outFileContents = "<pre><code>" + outFileContents + "</code></pre>";
+			 sb.append(outFileContents + "##--##\n");
+		}
+		writeToFile(sb, outputLoc+postNo+"/");
+
+	}
+	
 	 public static void main(String[] args) throws IOException, ParseException {
 		 
-		File dataDir = new File("/home/arun/Documents/Adaptive Web/assignment2/crawledPages/");
+		File dataDir = new File("./StemmedCrawledPages/");
 		// Check whether the directory to be indexed exists
 		if (!dataDir.exists() || !dataDir.isDirectory()) {
 			throw new IOException(
@@ -95,41 +154,50 @@ public class SimpleLuceneIndexing {
 		indexDirectory(writer, dataDir);
 		writer.close();
 		 
-		//Query string!  
-		String querystr = "contents:One way to implement deep copy is to add copy constructors to each associated class. A copy constructor takes an instance of 'this' as its single argument and copies all the values from it. Quite some work, but pretty straightforward and safe. EDIT  note that you don't need to use accessor methods to read fields. You can access all fields directly because the source instance is always of the same type as the instance with the copy constructor. Obvious but might be overlooked. Example Edit  Note that when using copy constructors you need to know the runtime type of the object you are copying. With the above approach you cannot easily copy a mixed list (you might be able to do it with some reflection code).";
-	
-		/*//This is going to be your selected posts.
-		Scanner console = new Scanner(System.in);
-		String querystr = "contents:"+console.nextLine();
-		System.out.println(querystr);
-		*/
-		
-		Query q = new QueryParser( "contents", analyzer).parse(querystr);
-		int hitsPerPage = 10;
-		IndexReader reader = null;
-		 
-		
-		 
-		 TopScoreDocCollector collector = null;
-		 IndexSearcher searcher = null;
-		 reader = DirectoryReader.open(indexDir);
-		 searcher = new IndexSearcher(reader);
-		 collector = TopScoreDocCollector.create(hitsPerPage);
-		 searcher.search(q, collector);
-		 
-		 
-		 
-		 ScoreDoc[] hits = collector.topDocs().scoreDocs;
-		 System.out.println("Found " + hits.length + " hits.");
-		 System.out.println();
-		 
-		 for (int i = 0; i < hits.length; ++i) {
-			 int docId = hits[i].doc;
-			 Document d;
-			 d = searcher.doc(docId);
-			 System.out.println((i + 1) + ". " + d.get("filename"));
-		 }
-		 reader.close();
+		//Query string!
+		int postNo = 1;
+		String querystr;
+		String inputContents = new String(Files.readAllBytes(Paths.get("./inputText.txt")));
+		String[] inputContentArray = inputContents.split("##--##");
+		for(String inputContent: inputContentArray){
+			querystr = inputContent;
+			String queryStrStemmed = applyPorterStemmer(querystr);
+			queryStrStemmed = "contents:"+queryStrStemmed;
+			/*//This is going to be your selected posts.
+			Scanner console = new Scanner(System.in);
+			String querystr = "contents:"+console.nextLine();
+			System.out.println(querystr);
+			*/
+			
+			Query q = new QueryParser( "contents", analyzer).parse(queryStrStemmed);
+			int hitsPerPage = 10;
+			IndexReader reader = null;
+			 
+			
+			 
+			 TopScoreDocCollector collector = null;
+			 IndexSearcher searcher = null;
+			 reader = DirectoryReader.open(indexDir);
+			 searcher = new IndexSearcher(reader);
+			 collector = TopScoreDocCollector.create(hitsPerPage);
+			 searcher.search(q, collector);
+			 
+			 
+			 
+			 ScoreDoc[] hits = collector.topDocs().scoreDocs;
+			 System.out.println("Found " + hits.length + " hits.");
+			 System.out.println();
+			 
+			 for (int i = 0; i < hits.length; ++i) {
+				 int docId = hits[i].doc;
+				 Document d;
+				 d = searcher.doc(docId);
+				 System.out.println((i + 1) + ". " + d.get("filename"));
+			 }
+			 extractContents(postNo, querystr, hits, searcher);
+			 postNo++;
+			 reader.close();
+		}
 	 }
 
 }
